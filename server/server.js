@@ -22,6 +22,7 @@ const Logger = require('./lib/Logger');
 const Room = require('./lib/Room');
 const interactiveServer = require('./lib/interactiveServer');
 const interactiveClient = require('./lib/interactiveClient');
+const exporter = require('./lib/exporter')
 
 const logger = new Logger();
 
@@ -57,6 +58,9 @@ run();
 
 async function run()
 {
+	// start exporter.
+	await exporter()
+
 	// Open the interactive server.
 	await interactiveServer();
 
