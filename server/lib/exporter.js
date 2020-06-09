@@ -2,6 +2,16 @@ const mediasoup = require('mediasoup');
 const express = require('express')
 const pidusage = require('pidusage')
 
+const {
+	getWorkersDump,
+	getRouterIds,
+	getRoutersDump, 
+	getProducerIds,
+	getConsumerIds,
+	getProducersStats,
+	getConsumersStats,
+} = require('./util-exporter')
+
 // Maps to store all mediasoup objects.
 const workers = new Map();
 const routers = new Map();
@@ -13,10 +23,8 @@ const dataConsumers = new Map();
 
 function runMediasoupObserver()
 {
-	mediasoup.observer.on('newworker', (worker) =>
-	{
-		console.log( 'observer ---- newWorker' )
-
+	mediasoup.observer.on('newworker', (worker) => {
+	
 		workers.set(worker.pid, worker);
 		worker.observer.on('close', () => workers.delete(worker.pid));
 
@@ -58,25 +66,47 @@ function runMediasoupObserver()
 	});
 }
 
-module.exports = async function()
-{
+module.exports = async function() {
 	// Run the mediasoup observer API.
 	runMediasoupObserver();
 
 	const app = express()
 
 	app.get('/workers', async (_, res) => {
-		const dumps = []
-		for( const worker of workers.values() ) {
-			try {
-				const dump = await worker.dump()
-				dumps.push( dump )
-			} catch(err) {
-				console.error( err )
-			}
-		}
-		res.json(dumps)
+		const workersDump = await getWorkersDump( workers )
+		res.json(workersDump)
 	})
+
+	app.get('/routers', async (_, res) => {
+		const workersDump = await getWorkersDump( workers )
+		const routerIds = getRouterIds( workersDump )
+		const routersDump = await getRoutersDump( routers, routerIds )
+
+		res.json( routersDump )
+	})
+
+	app.get('/producers', async (_, res) => {
+		const workersDump = await getWorkersDump( workers )
+		const routerIds = getRouterIds( workersDump )
+		const routersDump = await getRoutersDump( routers, routerIds )
+		const producerIds = getProducerIds( routersDump )
+		const producersStats = await getProducersStats( producerIds, producers)
+
+		res.json( producersStats )
+
+	})
+
+	app.get('/consumers', async (_, res) => {
+		const workersDump = await getWorkersDump( workers )
+		const routerIds = getRouterIds( workersDump )
+		const routersDump = await getRoutersDump( routers, routerIds )
+		const consumerIds = getConsumerIds( routersDump )
+		const consumersStats = await getConsumersStats( consumerIds, consumers)
+		
+		res.json( consumersStats )
+	})
+
+
 
 	app.get('/usage', async (_, res) => {
 		const usages = []
@@ -85,7 +115,7 @@ module.exports = async function()
 		usages.push( Object.assign({}, pusage, { type: 'parent' }) )
 
 		let wusage
-		for(const worker of workers.values()) {
+		for( let worker of workers.values() ) {
 			wusage =  await pidusage( worker.pid )
 			usages.push( Object.assign({}, wusage, { type: 'worker' }))
 		}
